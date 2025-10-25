@@ -173,23 +173,25 @@ const App: React.FC = () => {
   const handleGenerate = async (prompt: string) => {
     if (!image) return;
 
-    let currentApiKeysState = [...apiKeys];
-    const initialActiveKey = currentApiKeysState.find(k => k.isActive && k.status === 'valid');
-    
-    const validKeys = currentApiKeysState.filter(k => k.status === 'valid');
+    const validKeys = apiKeys.filter(k => k.status === 'valid');
     if (validKeys.length === 0) {
         alert("Vui lòng thêm và chọn một API Key hợp lệ trước khi tạo ảnh.");
         return;
     }
 
-    const startIndex = initialActiveKey ? validKeys.findIndex(k => k.key === initialActiveKey.key) : 0;
-    const orderedKeysToTry = startIndex !== -1 ? [...validKeys.slice(startIndex), ...validKeys.slice(0, startIndex)] : validKeys;
+    // Smartly order keys to try, starting with the active one
+    const activeKey = validKeys.find(k => k.isActive);
+    const startIndex = activeKey ? validKeys.findIndex(k => k.key === activeKey.key) : 0;
+    const orderedKeysToTry = startIndex !== -1 
+        ? [...validKeys.slice(startIndex), ...validKeys.slice(0, startIndex)] 
+        : validKeys;
 
     setIsLoading(true);
     setResultImage(null);
 
     let generatedImage: string | null = null;
     let successfulKey: ApiKey | null = null;
+    let hadQuotaError = false; // Track if we encountered any 429 error
 
     const imageWithText = textOverlays.length > 0
         ? await flattenTextOverlays(image, textOverlays)
@@ -215,14 +217,13 @@ const App: React.FC = () => {
             break; // Success! Exit the loop.
         } catch (error) {
             if (error instanceof QuotaExceededError) {
-                console.warn(`API Key ${keyToTry.key.substring(0,8)}... exceeded quota. Trying next key.`);
-                currentApiKeysState = currentApiKeysState.map(k => 
-                    k.key === keyToTry.key ? { ...k, status: 'invalid', isActive: false } : k
-                );
+                console.warn(`API Key ${keyToTry.key.substring(0,8)}... hit a rate limit. Trying next key.`);
+                hadQuotaError = true;
+                // IMPORTANT: We no longer mark the key as invalid. We just try the next one.
             } else {
-                alert(`Đã xảy ra lỗi khi gọi API Gemini: ${error instanceof Error ? error.message : String(error)}`);
-                generatedImage = null;
-                break; // Exit loop on non-quota error
+                alert(`Đã xảy ra lỗi không mong muốn khi gọi API: ${error instanceof Error ? error.message : String(error)}`);
+                generatedImage = null; // Ensure we don't proceed
+                break; // Exit loop on non-quota, hard errors
             }
         }
     }
@@ -231,15 +232,16 @@ const App: React.FC = () => {
 
     if (generatedImage && successfulKey) {
         setResultImage(generatedImage);
-        currentApiKeysState = currentApiKeysState.map(k => ({...k, isActive: k.key === successfulKey!.key}));
-    } else {
-        const remainingValidKeys = currentApiKeysState.filter(k => k.status === 'valid');
-        if (remainingValidKeys.length === 0 && validKeys.length > 0) {
-            alert("Tất cả API Key hợp lệ đã hết quota. Vui lòng thêm API Key mới.");
+        // If the successful key wasn't the active one, update the active status.
+        if (!successfulKey.isActive) {
+            const finalKeys = apiKeys.map(k => ({...k, isActive: k.key === successfulKey!.key}));
+            updateApiKeysInStateAndStorage(finalKeys);
         }
+    } else if (hadQuotaError) {
+        // This is only reached if all keys failed, and at least one was a quota error.
+        alert("Tất cả API Key hiện tại đều đã đạt đến giới hạn yêu cầu (rate-limited). Vui lòng đợi một lát rồi thử lại hoặc thêm key mới.");
     }
-    
-    updateApiKeysInStateAndStorage(currentApiKeysState);
+    // If we are here, generatedImage is null, and hadQuotaError is false, it means a hard error occurred and the alert was already shown inside the loop. No need for another alert.
   };
 
 
