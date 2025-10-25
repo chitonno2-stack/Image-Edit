@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { WorkMode } from '../types';
 import { WORK_MODES } from '../constants';
@@ -18,6 +19,7 @@ interface ContextualPanelProps {
   onToggleCollapse: () => void;
   onGenerate: (prompt: string) => void;
   isApiKeySet: boolean;
+  isCoolingDown: boolean;
   // Masking props
   isMasking: boolean;
   onToggleMasking: () => void;
@@ -37,6 +39,7 @@ const ContextualPanel: React.FC<ContextualPanelProps> = ({
   onToggleCollapse, 
   onGenerate,
   isApiKeySet,
+  isCoolingDown,
   isMasking,
   onToggleMasking,
   brushSize,
@@ -47,7 +50,7 @@ const ContextualPanel: React.FC<ContextualPanelProps> = ({
   const renderPanel = () => {
     switch (activeMode) {
       case WorkMode.PORTRAIT:
-        return <PortraitPanel settings={settings} onSettingsChange={onSettingsChange} onGenerate={onGenerate} isApiKeySet={isApiKeySet} />;
+        return <PortraitPanel settings={settings} onSettingsChange={onSettingsChange} onGenerate={onGenerate} isApiKeySet={isApiKeySet} isCoolingDown={isCoolingDown} />;
       case WorkMode.RESTORE:
         return <RestorePanel settings={settings} onSettingsChange={onSettingsChange} />;
       case WorkMode.CREATIVE:
@@ -58,6 +61,7 @@ const ContextualPanel: React.FC<ContextualPanelProps> = ({
                   onReferenceImageUpload={onReferenceImageUpload}
                   referenceImage={referenceImage}
                   isApiKeySet={isApiKeySet}
+                  isCoolingDown={isCoolingDown}
                   isMasking={isMasking}
                   onToggleMasking={onToggleMasking}
                   brushSize={brushSize}

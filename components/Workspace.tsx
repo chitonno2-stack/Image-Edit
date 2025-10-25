@@ -21,6 +21,7 @@ interface WorkspaceProps {
   canUndo: boolean;
   canRedo: boolean;
   isApiKeySet: boolean;
+  isCoolingDown: boolean;
   onOpenApiKeyModal: () => void;
   // Masking Props
   isMasking: boolean;
@@ -158,7 +159,7 @@ const DraggableText: React.FC<{
 
 
 const Workspace: React.FC<WorkspaceProps> = ({ 
-  activeMode, originalImage, resultImage, backgroundImage, onImageUpload, onClearImage, isLoading, onGenerate, onCommitResult, onUndo, onRedo, canUndo, canRedo, isApiKeySet, onOpenApiKeyModal,
+  activeMode, originalImage, resultImage, backgroundImage, onImageUpload, onClearImage, isLoading, onGenerate, onCommitResult, onUndo, onRedo, canUndo, canRedo, isApiKeySet, isCoolingDown, onOpenApiKeyModal,
   isMasking, identityMask, onMaskChange, brushSize,
   textOverlays, activeTextOverlayId, onAddText, onUpdateTextOverlay, onDeleteTextOverlay, onSelectTextOverlay
 }) => {
@@ -518,11 +519,11 @@ const Workspace: React.FC<WorkspaceProps> = ({
             />
             <button
                 onClick={handleGenerateClick}
-                disabled={isLoading || !originalImage || !isApiKeySet}
+                disabled={isLoading || !originalImage || !isApiKeySet || isCoolingDown}
                 className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
-                title={!isApiKeySet ? "Vui lòng nhập API Key để tạo ảnh" : ""}
+                title={!isApiKeySet ? "Vui lòng nhập API Key để tạo ảnh" : isCoolingDown ? "Đã đạt giới hạn yêu cầu, vui lòng đợi 1 phút." : ""}
             >
-                Tạo
+                {isCoolingDown ? 'Vui lòng đợi...' : 'Tạo'}
             </button>
             </div>
         </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import PanelSection from './PanelSection';
 import { BACKGROUND_SUGGESTIONS } from '../../constants';
@@ -16,6 +17,7 @@ interface CreativePanelProps {
   onReferenceImageUpload: (file: File) => void;
   referenceImage: string | null;
   isApiKeySet: boolean;
+  isCoolingDown: boolean;
   isMasking: boolean;
   onToggleMasking: () => void;
   brushSize: number;
@@ -64,7 +66,7 @@ const ReferenceImageUpload: React.FC<{ onUpload: (file: File) => void; image: st
 }
 
 const CreativePanel: React.FC<CreativePanelProps> = ({ 
-    settings, onSettingsChange, onGenerate, onReferenceImageUpload, referenceImage, isApiKeySet,
+    settings, onSettingsChange, onGenerate, onReferenceImageUpload, referenceImage, isApiKeySet, isCoolingDown,
     isMasking, onToggleMasking, brushSize, onBrushSizeChange
 }) => {
 
@@ -133,11 +135,11 @@ const CreativePanel: React.FC<CreativePanelProps> = ({
 
         <button 
           onClick={handleFullBodyGenerate}
-          disabled={!isApiKeySet}
-          title={!isApiKeySet ? "Vui lòng nhập API Key để sử dụng" : ""}
+          disabled={!isApiKeySet || isCoolingDown}
+          title={!isApiKeySet ? "Vui lòng nhập API Key để sử dụng" : isCoolingDown ? "Đã đạt giới hạn yêu cầu, vui lòng đợi." : ""}
           className="w-full mt-2 font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg py-3 transition-colors text-white disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
-          ✨ Tái Tạo Toàn Thân
+          {isCoolingDown ? 'Đang Chờ...' : '✨ Tái Tạo Toàn Thân'}
         </button>
 
       </PanelSection>
@@ -199,11 +201,11 @@ const CreativePanel: React.FC<CreativePanelProps> = ({
                  <h4 className="text-sm font-bold text-gray-300 mb-2">Bước 3: Lồng Ghép Siêu Thực</h4>
                  <button
                     onClick={handleStudioSwapGenerate}
-                    disabled={!isApiKeySet}
-                    title={!isApiKeySet ? "Vui lòng nhập API Key để sử dụng" : ""}
+                    disabled={!isApiKeySet || isCoolingDown}
+                    title={!isApiKeySet ? "Vui lòng nhập API Key để sử dụng" : isCoolingDown ? "Đã đạt giới hạn yêu cầu, vui lòng đợi." : ""}
                     className="w-full font-semibold bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 rounded-lg py-3 transition-all text-white shadow-lg disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed"
                  >
-                    🚀 Thực thi Lồng ghép
+                    {isCoolingDown ? 'Đang Chờ...' : '🚀 Thực thi Lồng ghép'}
                  </button>
               </div>
             </div>

@@ -84,6 +84,7 @@ const App: React.FC = () => {
   
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [isCoolingDown, setIsCoolingDown] = useState(false);
 
   // State for Identity Lock/Masking feature
   const [isMasking, setIsMasking] = useState(false);
@@ -175,7 +176,7 @@ const App: React.FC = () => {
   };
   
   const handleGenerate = async (prompt: string) => {
-    if (!image) return;
+    if (!image || isCoolingDown) return;
 
     const usableKeys = apiKeys.filter(k => k.status !== 'invalid');
     if (usableKeys.length === 0) {
@@ -252,7 +253,9 @@ const App: React.FC = () => {
         }
     } else if (hadQuotaError) {
         // This is only reached if all usable keys failed, and at least one was a quota error.
-        alert("Tất cả API Key hiện tại đều đã đạt đến giới hạn yêu cầu (rate-limited). Vui lòng đợi một lát rồi thử lại hoặc thêm key mới.");
+        alert("Tất cả API Key hiện tại đều đã đạt đến giới hạn yêu cầu (rate-limited). Vui lòng đợi một lát rồi thử lại hoặc thêm key mới. Ứng dụng sẽ tạm dừng trong 60 giây.");
+        setIsCoolingDown(true);
+        setTimeout(() => setIsCoolingDown(false), 60000); // 60-second cooldown
     } else if (!generatedImage) {
         // This is reached if all keys were tried and failed (e.g., all were marked invalid)
         const stillUsableKeys = apiKeys.filter(k => k.status !== 'invalid');
@@ -439,6 +442,7 @@ const App: React.FC = () => {
           onToggleCollapse={() => setIsPanelCollapsed(p => !p)}
           onGenerate={handleGenerate}
           isApiKeySet={!!activeApiKey}
+          isCoolingDown={isCoolingDown}
           // Masking props for Creative Panel
           isMasking={isMasking}
           onToggleMasking={() => setIsMasking(p => !p)}
@@ -462,6 +466,7 @@ const App: React.FC = () => {
           canUndo={canUndo}
           canRedo={canRedo}
           isApiKeySet={!!activeApiKey}
+          isCoolingDown={isCoolingDown}
           onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
           // Masking props for Workspace
           isMasking={isMasking}
