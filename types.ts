@@ -15,19 +15,20 @@ export interface ModeInfo {
   description: string;
 }
 
-export interface TextOverlay {
-  id: string;
-  text: string;
-  fontFamily: string;
-  fontSize: number; // As a percentage of the image's height
-  color: string;
-  textAlign: CanvasRenderingContext2D['textAlign'];
-  x: number; // position as percentage of width
-  y: number; // position as percentage of height
-}
-
 export interface ApiKey {
   key: string;
   status: 'valid' | 'invalid' | 'unknown' | 'checking';
   isActive: boolean;
+}
+
+// FIX: Added the missing `TextOverlay` interface, which is required by other components.
+export interface TextOverlay {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  fontFamily: string;
+  color: string;
+  textAlign: 'left' | 'center' | 'right';
 }

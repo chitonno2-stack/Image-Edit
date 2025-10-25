@@ -1,10 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { WorkMode, TextOverlay } from '../types';
+import { WorkMode } from '../types';
 import { PROMPT_SUGGESTIONS } from '../constants';
 import ImageComparator from './ImageComparator';
 import MaskingCanvas from './MaskingCanvas';
-import TextToolbar from './TextToolbar';
 
 interface WorkspaceProps {
   activeMode: WorkMode;
@@ -28,13 +27,6 @@ interface WorkspaceProps {
   identityMask: string | null;
   onMaskChange: (mask: string | null) => void;
   brushSize: number;
-  // Text Overlay Props
-  textOverlays: TextOverlay[];
-  activeTextOverlayId: string | null;
-  onAddText: () => void;
-  onUpdateTextOverlay: (id: string, updates: Partial<TextOverlay>) => void;
-  onDeleteTextOverlay: (id: string) => void;
-  onSelectTextOverlay: (id: string | null) => void;
 }
 
 const ImageUploadPlaceholder: React.FC<{ onImageUpload: (file: File) => void }> = ({ onImageUpload }) => {
@@ -72,96 +64,9 @@ const ImageUploadPlaceholder: React.FC<{ onImageUpload: (file: File) => void }> 
   );
 };
 
-const DraggableText: React.FC<{
-    overlay: TextOverlay;
-    imageContainerRef: React.RefObject<HTMLDivElement>;
-    onUpdate: (id: string, updates: Partial<TextOverlay>) => void;
-    onSelect: (id: string | null) => void;
-    isActive: boolean;
-}> = ({ overlay, imageContainerRef, onUpdate, onSelect, isActive }) => {
-    const textRef = useRef<HTMLDivElement>(null);
-    const dragData = useRef({ isDragging: false, startX: 0, startY: 0, initialX: 0, initialY: 0 });
-
-    const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-        e.stopPropagation(); // Prevent deselecting when clicking the text itself
-        onSelect(overlay.id);
-
-        if (imageContainerRef.current && textRef.current) {
-            dragData.current.isDragging = true;
-            const containerRect = imageContainerRef.current.getBoundingClientRect();
-            dragData.current.startX = e.clientX;
-            dragData.current.startY = e.clientY;
-            dragData.current.initialX = (overlay.x / 100) * containerRect.width;
-            dragData.current.initialY = (overlay.y / 100) * containerRect.height;
-        }
-    };
-
-    const handleMouseMove = (e: MouseEvent) => {
-        if (!dragData.current.isDragging || !imageContainerRef.current) return;
-        
-        const containerRect = imageContainerRef.current.getBoundingClientRect();
-        const deltaX = e.clientX - dragData.current.startX;
-        const deltaY = e.clientY - dragData.current.startY;
-
-        const newX = dragData.current.initialX + deltaX;
-        const newY = dragData.current.initialY + deltaY;
-
-        const newXPercent = (newX / containerRect.width) * 100;
-        const newYPercent = (newY / containerRect.height) * 100;
-
-        onUpdate(overlay.id, {
-            x: Math.max(0, Math.min(100, newXPercent)),
-            y: Math.max(0, Math.min(100, newYPercent)),
-        });
-    };
-
-    const handleMouseUp = () => {
-        dragData.current.isDragging = false;
-    };
-    
-    useEffect(() => {
-        window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
-        return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, []);
-
-    // FIX: Removed unused variables that were causing an error because `originalImage` was not defined in this component's scope.
-    // The calculated aspect ratio was not being used.
-
-    return (
-        <div
-            ref={textRef}
-            onMouseDown={handleMouseDown}
-            style={{
-                position: 'absolute',
-                left: `${overlay.x}%`,
-                top: `${overlay.y}%`,
-                transform: 'translate(-50%, -50%)',
-                fontFamily: overlay.fontFamily,
-                fontSize: `${overlay.fontSize / 10}rem`, // Use REM for better scalability
-                color: overlay.color,
-                textAlign: overlay.textAlign,
-                cursor: 'move',
-                padding: '0.5rem',
-                border: isActive ? '2px dashed rgba(59, 130, 246, 0.7)' : '2px dashed transparent',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                minWidth: '50px'
-            }}
-        >
-            {overlay.text}
-        </div>
-    );
-};
-
-
 const Workspace: React.FC<WorkspaceProps> = ({ 
   activeMode, originalImage, resultImage, backgroundImage, onImageUpload, onClearImage, isLoading, onGenerate, onCommitResult, onUndo, onRedo, canUndo, canRedo, isApiKeySet, isCoolingDown, onOpenApiKeyModal,
-  isMasking, identityMask, onMaskChange, brushSize,
-  textOverlays, activeTextOverlayId, onAddText, onUpdateTextOverlay, onDeleteTextOverlay, onSelectTextOverlay
+  isMasking, identityMask, onMaskChange, brushSize
 }) => {
   const [prompt, setPrompt] = useState('');
   const [compareMode, setCompareMode] = useState<'slider' | 'side-by-side'>('slider');
@@ -265,7 +170,6 @@ const Workspace: React.FC<WorkspaceProps> = ({
     };
   }, [showExportMenu]);
 
-  const activeOverlay = textOverlays.find(o => o.id === activeTextOverlayId);
   const isCompositePreview = activeMode === WorkMode.COMPOSITE && originalImage && backgroundImage && !resultImage;
 
   return (
@@ -297,15 +201,6 @@ const Workspace: React.FC<WorkspaceProps> = ({
         </div>
         <div className="flex items-center gap-2">
             <button
-              onClick={onAddText}
-              disabled={!originalImage}
-              className="flex items-center gap-2 px-4 py-1.5 bg-gray-700 text-white rounded-md backdrop-blur-sm hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Thêm Văn Bản"
-            >
-               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h7.5M8.25 12h7.5m-7.5 5.25h7.5M3.75 6.75h.007v.008H3.75V6.75Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0ZM3.75 12h.007v.008H3.75V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm-.375 5.25h.007v.008H3.75v-.008Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></svg>
-              <span>Thêm Văn Bản</span>
-            </button>
-            <button
                 onClick={onOpenApiKeyModal}
                 className="flex items-center gap-2 px-4 py-1.5 bg-gray-700 text-white rounded-md backdrop-blur-sm hover:bg-gray-600 transition-colors"
                 aria-label="Cài đặt API Key"
@@ -317,7 +212,7 @@ const Workspace: React.FC<WorkspaceProps> = ({
             </button>
         </div>
       </div>
-      <div className="flex-grow p-4 flex justify-center items-center relative min-h-0" onClick={() => onSelectTextOverlay(null)}>
+      <div className="flex-grow p-4 flex justify-center items-center relative min-h-0">
         {originalImage ? (
           <div className="flex w-full h-full gap-4">
             <div className="flex-[2] flex flex-col items-center justify-center bg-gray-900/50 rounded-lg p-2 relative">
@@ -340,19 +235,6 @@ const Workspace: React.FC<WorkspaceProps> = ({
                         onMaskChange={onMaskChange}
                       />
                   )}
-                  {/* Render Text Overlays on the original image pane */}
-                  <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-                     {textOverlays.map(overlay => (
-                          <DraggableText 
-                            key={overlay.id}
-                            overlay={overlay}
-                            imageContainerRef={imageDisplayContainerRef}
-                            onUpdate={onUpdateTextOverlay}
-                            onSelect={onSelectTextOverlay}
-                            isActive={overlay.id === activeTextOverlayId}
-                          />
-                      ))}
-                  </div>
               </div>
             </div>
             
@@ -476,15 +358,6 @@ const Workspace: React.FC<WorkspaceProps> = ({
           </div>
         ) : (
           <ImageUploadPlaceholder onImageUpload={onImageUpload} />
-        )}
-
-        {/* Floating Text Toolbar */}
-        {activeOverlay && (
-          <TextToolbar
-            overlay={activeOverlay}
-            onUpdate={onUpdateTextOverlay}
-            onDelete={onDeleteTextOverlay}
-          />
         )}
       </div>
       <div className="flex-shrink-0 p-6 border-t border-gray-700/50 bg-gray-800/30">

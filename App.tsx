@@ -3,9 +3,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import ControlCenter from './components/ControlCenter';
 import Workspace from './components/Workspace';
 import ContextualPanel from './components/ContextualPanel';
-import { WorkMode, TextOverlay, ApiKey } from './types';
+import { WorkMode, ApiKey } from './types';
 import { generateImageWithGemini, QuotaExceededError, AuthenticationError } from './services/geminiService';
-import { flattenTextOverlays } from './services/imageUtils';
 import ApiKeyModal from './components/ApiKeyModal';
 
 const initialSettings = {
@@ -91,10 +90,6 @@ const App: React.FC = () => {
   const [identityMask, setIdentityMask] = useState<string | null>(null);
   const [brushSize, setBrushSize] = useState(40);
 
-  // State for Text Overlays
-  const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
-  const [activeTextOverlayId, setActiveTextOverlayId] = useState<string | null>(null);
-
   // Load keys from localStorage on initial mount
   useEffect(() => {
     try {
@@ -140,8 +135,6 @@ const App: React.FC = () => {
       setResultImage(null);
       setIdentityMask(null); // Clear mask on new image
       setIsMasking(false);
-      setTextOverlays([]); // Clear text overlays on new image
-      setActiveTextOverlayId(null);
     };
     reader.readAsDataURL(file);
   };
@@ -155,8 +148,6 @@ const App: React.FC = () => {
     setReferenceImage(null);
     setIdentityMask(null);
     setIsMasking(false);
-    setTextOverlays([]);
-    setActiveTextOverlayId(null);
   };
 
   const handleBackgroundImageUpload = (file: File) => {
@@ -198,17 +189,14 @@ const App: React.FC = () => {
     let successfulKey: ApiKey | null = null;
     let hadQuotaError = false; // Track if we encountered any 429 error
 
-    const imageWithText = textOverlays.length > 0
-        ? await flattenTextOverlays(image, textOverlays)
-        : image;
-    const mimeType = imageWithText.substring(imageWithText.indexOf(':') + 1, imageWithText.indexOf(';'));
+    const mimeType = image.substring(image.indexOf(':') + 1, image.indexOf(';'));
 
     for (const keyToTry of orderedKeysToTry) {
         try {
             console.log(`Attempting generation with key: ${keyToTry.key.substring(0, 8)}...`);
             const result = await generateImageWithGemini({
                 apiKey: keyToTry.key,
-                base64Image: imageWithText,
+                base64Image: image,
                 base64BackgroundImage: activeMode === WorkMode.COMPOSITE ? backgroundImage : undefined,
                 base64ReferenceImage: activeMode === WorkMode.CREATIVE ? referenceImage : undefined,
                 base64Mask: activeMode === WorkMode.CREATIVE && isMasking ? identityMask : undefined,
@@ -319,35 +307,6 @@ const App: React.FC = () => {
     }
   };
   
-  // --- Text Overlay Handlers ---
-  const handleAddText = () => {
-    const newText: TextOverlay = {
-      id: `text-${Date.now()}`,
-      text: 'Nhập văn bản',
-      fontFamily: 'Arial',
-      fontSize: 5, // 5% of image height
-      color: '#FFFFFF',
-      textAlign: 'center',
-      x: 50,
-      y: 50,
-    };
-    setTextOverlays(prev => [...prev, newText]);
-    setActiveTextOverlayId(newText.id);
-  };
-
-  const handleUpdateTextOverlay = (id: string, updates: Partial<TextOverlay>) => {
-    setTextOverlays(prev => prev.map(overlay => 
-      overlay.id === id ? { ...overlay, ...updates } : overlay
-    ));
-  };
-
-  const handleDeleteTextOverlay = (id: string) => {
-    setTextOverlays(prev => prev.filter(overlay => overlay.id !== id));
-    if (activeTextOverlayId === id) {
-      setActiveTextOverlayId(null);
-    }
-  };
-
   // --- API Key Handlers ---
   const handleAddApiKeys = (keysString: string) => {
     const newKeyStrings = keysString.split('\n')
@@ -422,66 +381,68 @@ const App: React.FC = () => {
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
+  const isPortraitMode = activeMode === WorkMode.PORTRAIT;
+
+  const contextualPanelProps = {
+    activeMode,
+    settings: activeSettings,
+    onSettingsChange: handleSettingsChange,
+    onBackgroundImageUpload: handleBackgroundImageUpload,
+    backgroundImage,
+    onReferenceImageUpload: handleReferenceImageUpload,
+    referenceImage,
+    // FIX: Changed `isCollapsed` to `isCollapsed: isPanelCollapsed` as `isCollapsed` is not defined.
+    isCollapsed: isPanelCollapsed,
+    onToggleCollapse: () => setIsPanelCollapsed(p => !p),
+    onGenerate: handleGenerate,
+    isApiKeySet: !!activeApiKey,
+    isCoolingDown,
+    isMasking,
+    onToggleMasking: () => setIsMasking(p => !p),
+    brushSize,
+    onBrushSizeChange: setBrushSize,
+  };
+
 
   return (
-    <div className="flex h-screen w-screen bg-gray-800/50">
-      <aside className="w-80 flex flex-col bg-gray-900 border-r border-gray-700/50">
-        <ControlCenter 
-          activeMode={activeMode} 
-          setActiveMode={handleModeChange}
-        />
-        <ContextualPanel 
-          activeMode={activeMode} 
-          settings={activeSettings}
-          onSettingsChange={handleSettingsChange}
-          onBackgroundImageUpload={handleBackgroundImageUpload}
-          backgroundImage={backgroundImage}
-          onReferenceImageUpload={handleReferenceImageUpload}
-          referenceImage={referenceImage}
-          isCollapsed={isPanelCollapsed}
-          onToggleCollapse={() => setIsPanelCollapsed(p => !p)}
-          onGenerate={handleGenerate}
-          isApiKeySet={!!activeApiKey}
-          isCoolingDown={isCoolingDown}
-          // Masking props for Creative Panel
-          isMasking={isMasking}
-          onToggleMasking={() => setIsMasking(p => !p)}
-          brushSize={brushSize}
-          onBrushSizeChange={setBrushSize}
-        />
-      </aside>
-      <main className="flex-1 flex flex-col p-4 gap-4">
-        <Workspace 
-          activeMode={activeMode}
-          originalImage={image}
-          resultImage={resultImage}
-          backgroundImage={backgroundImage}
-          onImageUpload={handleImageUpload}
-          onClearImage={handleClearImage}
-          isLoading={isLoading}
-          onGenerate={handleGenerate}
-          onCommitResult={handleCommitResult}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          isApiKeySet={!!activeApiKey}
-          isCoolingDown={isCoolingDown}
-          onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
-          // Masking props for Workspace
-          isMasking={isMasking}
-          identityMask={identityMask}
-          onMaskChange={setIdentityMask}
-          brushSize={brushSize}
-          // Text Overlay props
-          textOverlays={textOverlays}
-          activeTextOverlayId={activeTextOverlayId}
-          onAddText={handleAddText}
-          onUpdateTextOverlay={handleUpdateTextOverlay}
-          onDeleteTextOverlay={handleDeleteTextOverlay}
-          onSelectTextOverlay={setActiveTextOverlayId}
-        />
-      </main>
+    <div className={isPortraitMode ? "h-screen w-screen flex flex-col bg-gray-800/50" : "flex h-screen w-screen bg-gray-800/50"}>
+      {isPortraitMode && <ContextualPanel {...contextualPanelProps} layout="horizontal" />}
+      
+      <div className="flex flex-1 min-h-0">
+        <aside className="w-80 flex flex-col bg-gray-900 border-r border-gray-700/50">
+          <ControlCenter 
+            activeMode={activeMode} 
+            setActiveMode={handleModeChange}
+          />
+          {!isPortraitMode && <ContextualPanel {...contextualPanelProps} layout="vertical" />}
+        </aside>
+        <main className="flex-1 flex flex-col p-4 gap-4">
+          <Workspace 
+            activeMode={activeMode}
+            originalImage={image}
+            resultImage={resultImage}
+            backgroundImage={backgroundImage}
+            onImageUpload={handleImageUpload}
+            onClearImage={handleClearImage}
+            isLoading={isLoading}
+            onGenerate={handleGenerate}
+            onCommitResult={handleCommitResult}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            isApiKeySet={!!activeApiKey}
+            isCoolingDown={isCoolingDown}
+            onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+            // Masking props for Workspace
+            isMasking={isMasking}
+            identityMask={identityMask}
+            onMaskChange={setIdentityMask}
+            brushSize={brushSize}
+          />
+        </main>
+      </div>
+
       <ApiKeyModal
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
