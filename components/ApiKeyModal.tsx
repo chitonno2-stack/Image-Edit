@@ -6,7 +6,7 @@ interface ApiKeyModalProps {
   isOpen: boolean;
   onClose: () => void;
   apiKeys: ApiKey[];
-  onAddKey: (key: string) => Promise<void>;
+  onAddKeys: (keys: string) => Promise<void>;
   onRemoveKey: (key: string) => void;
   onSetActiveKey: (key: string) => void;
 }
@@ -26,7 +26,7 @@ const ApiKeyStatusIndicator: React.FC<{ status: ApiKey['status'] }> = ({ status 
     }
 };
 
-const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKeys, onAddKey, onRemoveKey, onSetActiveKey }) => {
+const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKeys, onAddKeys, onRemoveKey, onSetActiveKey }) => {
   const [inputValue, setInputValue] = useState('');
   const [isAdding, setIsAdding] = useState(false);
 
@@ -35,15 +35,9 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKeys, onA
   const handleAdd = async () => {
     if (!inputValue.trim()) return;
     setIsAdding(true);
-    await onAddKey(inputValue.trim());
+    await onAddKeys(inputValue);
     setInputValue('');
     setIsAdding(false);
-  };
-
-  const handleKeyPress = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      handleAdd();
-    }
   };
 
   const maskKey = (key: string) => {
@@ -101,17 +95,15 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKeys, onA
 
         <div>
           <label htmlFor="api-key-input" className="block text-sm font-medium text-gray-300 mb-2">
-            Thêm API Key mới
+            Thêm API Key mới (mỗi key một dòng)
           </label>
           <div className="flex gap-2">
-            <input
+            <textarea
               id="api-key-input"
-              type="password"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Dán API Key vào đây..."
-              className="flex-1 w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Dán một hoặc nhiều API Key vào đây, mỗi key một dòng..."
+              className="flex-1 w-full bg-gray-700/50 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-y"
             />
             <button
               onClick={handleAdd}

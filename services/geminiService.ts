@@ -14,6 +14,13 @@ interface EditParams {
   settings: Record<string, any>;
 }
 
+export class QuotaExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'QuotaExceededError';
+  }
+}
+
 export const validateApiKey = async (apiKey: string): Promise<boolean> => {
     if (!apiKey) return false;
     try {
@@ -332,7 +339,10 @@ export const generateImageWithGemini = async ({ apiKey, base64Image, base64Backg
 
     } catch (error) {
         console.error("Error calling Gemini API:", error);
-        alert(`Đã xảy ra lỗi khi gọi API Gemini: ${error instanceof Error ? error.message : String(error)}\n\nVui lòng kiểm tra lại API Key và thử lại.`);
-        return base64Image;
+        if (error instanceof Error && (error.message.includes('429') || error.message.toLowerCase().includes('quota'))) {
+            throw new QuotaExceededError('API quota exceeded or rate limit reached.');
+        }
+        // Re-throw other errors to be handled by the UI layer
+        throw error;
     }
 };
