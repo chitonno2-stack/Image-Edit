@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ApiKey } from '../types';
 
 interface ApiKeyModalProps {
@@ -28,6 +28,18 @@ const ApiKeyStatusIndicator: React.FC<{ status: ApiKey['status'] }> = ({ status 
 
 const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKeys, onAddKeys, onRemoveKey, onSetActiveKey }) => {
   const [inputValue, setInputValue] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    // Update the current time every second to re-render cooldown timers
+    const timerId = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(timerId);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -61,31 +73,42 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKeys, onA
         </div>
 
         <div className="flex flex-col gap-2 bg-gray-900/50 p-3 rounded-lg max-h-60 overflow-y-auto">
-          {apiKeys.length > 0 ? apiKeys.map(({ key, status, isActive }) => (
-            <div key={key} className={`flex items-center justify-between p-2 rounded-md transition-colors ${isActive ? 'bg-blue-600/20 border border-blue-500/30' : 'bg-gray-700/50'}`}>
-                <div className="flex items-center gap-3">
-                    <ApiKeyStatusIndicator status={status} />
-                    <span className="font-mono text-sm text-gray-300">{maskKey(key)}</span>
-                    {isActive && <span className="text-xs font-bold text-blue-400 bg-blue-900/50 px-2 py-0.5 rounded-full">Đang dùng</span>}
-                </div>
-                <div className="flex items-center gap-2">
-                    {!isActive && status !== 'invalid' && (
-                        <button 
-                            onClick={() => onSetActiveKey(key)}
-                            className="text-xs text-green-400 hover:text-green-300 hover:underline px-2"
-                        >
-                            Sử dụng
-                        </button>
-                    )}
-                    <button 
-                        onClick={() => onRemoveKey(key)}
-                        className="text-xs text-red-400 hover:text-red-300 hover:underline px-2"
-                    >
-                        Xóa
-                    </button>
-                </div>
-            </div>
-          )) : (
+          {apiKeys.length > 0 ? apiKeys.map((apiKey) => {
+            const { key, status, isActive } = apiKey;
+            const isCoolingDown = apiKey.cooldownUntil && apiKey.cooldownUntil > now;
+            const secondsLeft = isCoolingDown ? Math.ceil((apiKey.cooldownUntil! - now) / 1000) : 0;
+
+            return (
+              <div key={key} className={`flex items-center justify-between p-2 rounded-md transition-colors ${isActive ? 'bg-blue-600/20 border border-blue-500/30' : 'bg-gray-700/50'}`}>
+                  <div className="flex items-center gap-3">
+                      <ApiKeyStatusIndicator status={status} />
+                      <span className="font-mono text-sm text-gray-300">{maskKey(key)}</span>
+                      {isActive && <span className="text-xs font-bold text-blue-400 bg-blue-900/50 px-2 py-0.5 rounded-full">Đang dùng</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                      {!isActive && status !== 'invalid' && !isCoolingDown && (
+                          <button 
+                              onClick={() => onSetActiveKey(key)}
+                              className="text-xs text-green-400 hover:text-green-300 hover:underline px-2"
+                          >
+                              Sử dụng
+                          </button>
+                      )}
+                      {isCoolingDown && (
+                          <span className="text-xs text-yellow-400 px-2">
+                              Đang chờ... ({secondsLeft}s)
+                          </span>
+                      )}
+                      <button 
+                          onClick={() => onRemoveKey(key)}
+                          className="text-xs text-red-400 hover:text-red-300 hover:underline px-2"
+                      >
+                          Xóa
+                      </button>
+                  </div>
+              </div>
+            );
+          }) : (
             <p className="text-center text-gray-500 text-sm py-4">Chưa có API Key nào.</p>
           )}
         </div>

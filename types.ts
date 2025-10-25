@@ -19,6 +19,7 @@ export interface ApiKey {
   key: string;
   status: 'valid' | 'invalid' | 'unknown' | 'checking';
   isActive: boolean;
+  cooldownUntil?: number;
 }
 
 // FIX: Added the missing `TextOverlay` interface, which is required by other components.

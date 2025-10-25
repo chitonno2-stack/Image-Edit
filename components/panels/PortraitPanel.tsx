@@ -29,7 +29,6 @@ interface PortraitPanelProps {
   onGenerate: (prompt: string) => void;
   isApiKeySet: boolean;
   isCoolingDown: boolean;
-  layout?: 'vertical' | 'horizontal';
 }
 
 const ButtonGroup: React.FC<{ options: {value: string, label: string}[], selected: string, onSelect: (option: string) => void }> = ({ options, selected, onSelect }) => (
@@ -47,10 +46,8 @@ const ButtonGroup: React.FC<{ options: {value: string, label: string}[], selecte
 );
 
 
-const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChange, onGenerate, isApiKeySet, isCoolingDown, layout = 'vertical' }) => {
+const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChange, onGenerate, isApiKeySet, isCoolingDown }) => {
   
-  const isHorizontal = layout === 'horizontal';
-
   const handleInstantRemaster = () => {
     onGenerate("INSTANT_STUDIO_REMASTER");
   }
@@ -68,11 +65,9 @@ const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChang
     onGenerate(prompt);
   };
 
-  const panelSectionWrapperClasses = isHorizontal ? 'w-72 flex-shrink-0' : '';
-
   return (
-    <div className={isHorizontal ? "flex flex-row gap-4 px-4 pb-4" : "flex flex-col gap-4"}>
-      <div className={isHorizontal ? `flex-shrink-0 w-72 pt-6` : `p-2`}>
+    <div className="flex flex-col gap-4">
+      <div className="p-2">
         <button 
           onClick={handleInstantRemaster}
           disabled={!isApiKeySet || isCoolingDown}
@@ -83,7 +78,7 @@ const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChang
         </button>
       </div>
 
-      <div className={panelSectionWrapperClasses}>
+      <div>
         <PanelSection title="Cốt Lõi: Danh Tính & Chi Tiết">
           <div className="text-sm bg-green-800/30 border border-green-500 text-green-300 font-semibold p-3 rounded-lg text-center">
             ✅ Đã khóa 100% Danh Tính Gốc (3DMM)
@@ -109,7 +104,7 @@ const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChang
         </PanelSection>
       </div>
       
-      <div className={panelSectionWrapperClasses}>
+      <div>
         <PanelSection title="Ánh Sáng Studio Động">
           <div className="text-sm bg-gray-700/80 p-3 rounded-lg">
             <p className="font-bold text-white">Phân Tích Ánh Sáng Gốc:</p>
@@ -142,7 +137,7 @@ const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChang
         </PanelSection>
       </div>
       
-      <div className={panelSectionWrapperClasses}>
+      <div>
         <PanelSection title="Hiệu Ứng Ống Kính">
           <Switch 
             label="Tự động Tách Nền & Xóa Phông"
@@ -178,7 +173,7 @@ const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChang
         </PanelSection>
       </div>
 
-      <div className={panelSectionWrapperClasses}>
+      <div>
         <PanelSection title="Làm Đẹp & Phong Cách">
           <h4 className="text-sm font-semibold text-gray-300 -mt-1 mb-2">Da Siêu Thực</h4>
           <Slider 

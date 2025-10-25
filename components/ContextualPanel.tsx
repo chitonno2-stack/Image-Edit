@@ -25,8 +25,6 @@ interface ContextualPanelProps {
   onToggleMasking: () => void;
   brushSize: number;
   onBrushSizeChange: (size: number) => void;
-  // New layout prop
-  layout?: 'vertical' | 'horizontal';
 }
 
 const ContextualPanel: React.FC<ContextualPanelProps> = ({ 
@@ -46,15 +44,13 @@ const ContextualPanel: React.FC<ContextualPanelProps> = ({
   onToggleMasking,
   brushSize,
   onBrushSizeChange,
-  layout = 'vertical'
 }) => {
   const activeModeInfo = WORK_MODES.find(m => m.id === activeMode);
-  const isHorizontal = layout === 'horizontal';
 
   const renderPanel = () => {
     switch (activeMode) {
       case WorkMode.PORTRAIT:
-        return <PortraitPanel settings={settings} onSettingsChange={onSettingsChange} onGenerate={onGenerate} isApiKeySet={isApiKeySet} isCoolingDown={isCoolingDown} layout={layout} />;
+        return <PortraitPanel settings={settings} onSettingsChange={onSettingsChange} onGenerate={onGenerate} isApiKeySet={isApiKeySet} isCoolingDown={isCoolingDown} />;
       case WorkMode.RESTORE:
         return <RestorePanel settings={settings} onSettingsChange={onSettingsChange} />;
       case WorkMode.CREATIVE:
@@ -79,10 +75,7 @@ const ContextualPanel: React.FC<ContextualPanelProps> = ({
   };
 
   return (
-    <div className={isHorizontal
-        ? "flex flex-col flex-shrink-0 bg-gray-900 border-b border-gray-700/50"
-        : "flex flex-col flex-1 min-h-0 border-t border-gray-700/50"
-    }>
+    <div className="flex flex-col flex-1 min-h-0 border-t border-gray-700/50">
       <div className="p-4">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-bold text-white">{activeModeInfo?.name}</h2>
@@ -104,10 +97,7 @@ const ContextualPanel: React.FC<ContextualPanelProps> = ({
       </div>
 
       {!isCollapsed && (
-        <div className={isHorizontal 
-            ? "overflow-x-auto" 
-            : "flex-1 overflow-y-auto px-4 pb-4"
-        }>
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
           {renderPanel()}
         </div>
       )}

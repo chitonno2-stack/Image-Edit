@@ -169,9 +169,28 @@ const App: React.FC = () => {
   const handleGenerate = async (prompt: string) => {
     if (!image || isCoolingDown) return;
 
-    const usableKeys = apiKeys.filter(k => k.status !== 'invalid');
-    if (usableKeys.length === 0) {
+    const now = Date.now();
+    const allValidKeys = apiKeys.filter(k => k.status !== 'invalid');
+
+    if (allValidKeys.length === 0) {
         alert("Vui lòng thêm một API Key hợp lệ trước khi tạo ảnh.");
+        setIsApiKeyModalOpen(true);
+        return;
+    }
+
+    const usableKeys = allValidKeys.filter(k => !k.cooldownUntil || k.cooldownUntil <= now);
+    
+    if (usableKeys.length === 0) {
+        const cooldownKeys = allValidKeys.filter(k => k.cooldownUntil && k.cooldownUntil > now);
+        const nextAvailableTime = Math.min(...cooldownKeys.map(k => k.cooldownUntil!));
+        const secondsRemaining = Math.ceil((nextAvailableTime - now) / 1000);
+        
+        alert(`Tất cả API Key đều đang trong thời gian chờ. Vui lòng thử lại sau ${secondsRemaining} giây.`);
+        
+        if (!isCoolingDown) {
+            setIsCoolingDown(true);
+            setTimeout(() => setIsCoolingDown(false), secondsRemaining * 1000 + 500); // Add buffer
+        }
         return;
     }
 
@@ -187,8 +206,7 @@ const App: React.FC = () => {
 
     let generatedImage: string | null = null;
     let successfulKey: ApiKey | null = null;
-    let hadQuotaError = false; // Track if we encountered any 429 error
-
+    
     const mimeType = image.substring(image.indexOf(':') + 1, image.indexOf(';'));
 
     for (const keyToTry of orderedKeysToTry) {
@@ -208,7 +226,6 @@ const App: React.FC = () => {
             generatedImage = result;
             successfulKey = keyToTry;
             
-            // LAZY VALIDATION: If the key worked, mark it as 'valid' if it was 'unknown'
             if (keyToTry.status === 'unknown') {
                 setApiKeys(prev => prev.map(k => k.key === keyToTry.key ? {...k, status: 'valid'} : k));
             }
@@ -218,11 +235,10 @@ const App: React.FC = () => {
             if (error instanceof AuthenticationError) {
                 console.error(`API Key ${keyToTry.key.substring(0,8)}... is invalid. Marking as invalid.`);
                 setApiKeys(prev => prev.map(k => k.key === keyToTry.key ? {...k, status: 'invalid'} : k));
-                // Continue to the next key, don't alert the user yet
             } else if (error instanceof QuotaExceededError) {
                 console.warn(`API Key ${keyToTry.key.substring(0,8)}... hit a rate limit. Trying next key.`);
-                hadQuotaError = true;
-                // Continue to the next key
+                // Set a 61-second cooldown on this specific key
+                setApiKeys(prev => prev.map(k => k.key === keyToTry.key ? {...k, cooldownUntil: Date.now() + 61000} : k));
             } else {
                 alert(`Đã xảy ra lỗi không mong muốn khi gọi API: ${error instanceof Error ? error.message : String(error)}`);
                 generatedImage = null; // Ensure we don't proceed
@@ -239,15 +255,14 @@ const App: React.FC = () => {
         if (!successfulKey.isActive) {
             handleSetActiveApiKey(successfulKey.key);
         }
-    } else if (hadQuotaError) {
-        // This is only reached if all usable keys failed, and at least one was a quota error.
-        alert("Tất cả API Key hiện tại đều đã đạt đến giới hạn yêu cầu (rate-limited). Vui lòng đợi một lát rồi thử lại hoặc thêm key mới. Ứng dụng sẽ tạm dừng trong 60 giây.");
-        setIsCoolingDown(true);
-        setTimeout(() => setIsCoolingDown(false), 60000); // 60-second cooldown
     } else if (!generatedImage) {
-        // This is reached if all keys were tried and failed (e.g., all were marked invalid)
-        const stillUsableKeys = apiKeys.filter(k => k.status !== 'invalid');
-        if(stillUsableKeys.length === 0) {
+        const nowAfterAttempts = Date.now();
+        const stillUsableKeys = apiKeys.filter(k => k.status !== 'invalid' && (!k.cooldownUntil || k.cooldownUntil <= nowAfterAttempts));
+        const allValidKeysCount = apiKeys.filter(k => k.status !== 'invalid').length;
+
+        if (allValidKeysCount > 0 && stillUsableKeys.length === 0) {
+            alert("Tất cả API Key của bạn đã đạt đến giới hạn. Vui lòng thử lại sau một phút.");
+        } else if (allValidKeysCount === 0) {
             alert("Tất cả API Key của bạn đã được xác định là không hợp lệ. Vui lòng thêm key mới.");
         }
     }
@@ -381,7 +396,6 @@ const App: React.FC = () => {
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
-  const isPortraitMode = activeMode === WorkMode.PORTRAIT;
 
   const contextualPanelProps = {
     activeMode,
@@ -391,7 +405,6 @@ const App: React.FC = () => {
     backgroundImage,
     onReferenceImageUpload: handleReferenceImageUpload,
     referenceImage,
-    // FIX: Changed `isCollapsed` to `isCollapsed: isPanelCollapsed` as `isCollapsed` is not defined.
     isCollapsed: isPanelCollapsed,
     onToggleCollapse: () => setIsPanelCollapsed(p => !p),
     onGenerate: handleGenerate,
@@ -405,16 +418,14 @@ const App: React.FC = () => {
 
 
   return (
-    <div className={isPortraitMode ? "h-screen w-screen flex flex-col bg-gray-800/50" : "flex h-screen w-screen bg-gray-800/50"}>
-      {isPortraitMode && <ContextualPanel {...contextualPanelProps} layout="horizontal" />}
-      
+    <div className="flex h-screen w-screen bg-gray-800/50">
       <div className="flex flex-1 min-h-0">
         <aside className="w-80 flex flex-col bg-gray-900 border-r border-gray-700/50">
           <ControlCenter 
             activeMode={activeMode} 
             setActiveMode={handleModeChange}
           />
-          {!isPortraitMode && <ContextualPanel {...contextualPanelProps} layout="vertical" />}
+          <ContextualPanel {...contextualPanelProps} />
         </aside>
         <main className="flex-1 flex flex-col p-4 gap-4">
           <Workspace 
