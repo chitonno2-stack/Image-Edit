@@ -172,69 +172,76 @@ const App: React.FC = () => {
   
   const handleGenerate = async (prompt: string) => {
     if (!image) return;
+
+    let currentApiKeysState = [...apiKeys];
+    const initialActiveKey = currentApiKeysState.find(k => k.isActive && k.status === 'valid');
     
-    let activeKeyInfo = apiKeys.find(k => k.isActive);
-    if (!activeKeyInfo || activeKeyInfo.status !== 'valid') {
-      alert("Vui lòng chọn một API Key hợp lệ trước khi tạo ảnh.");
-      return;
+    const validKeys = currentApiKeysState.filter(k => k.status === 'valid');
+    if (validKeys.length === 0) {
+        alert("Vui lòng thêm và chọn một API Key hợp lệ trước khi tạo ảnh.");
+        return;
     }
+
+    const startIndex = initialActiveKey ? validKeys.findIndex(k => k.key === initialActiveKey.key) : 0;
+    const orderedKeysToTry = startIndex !== -1 ? [...validKeys.slice(startIndex), ...validKeys.slice(0, startIndex)] : validKeys;
 
     setIsLoading(true);
     setResultImage(null);
 
-    const generateWithKey = async (apiKey: string) => {
-        const imageWithText = textOverlays.length > 0
-          ? await flattenTextOverlays(image, textOverlays)
-          : image;
-          
-        const mimeType = imageWithText.substring(imageWithText.indexOf(':') + 1, imageWithText.indexOf(';'));
-        return await generateImageWithGemini({
-          apiKey: apiKey,
-          base64Image: imageWithText,
-          base64BackgroundImage: activeMode === WorkMode.COMPOSITE ? backgroundImage : undefined,
-          base64ReferenceImage: activeMode === WorkMode.CREATIVE ? referenceImage : undefined,
-          base64Mask: activeMode === WorkMode.CREATIVE && isMasking ? identityMask : undefined,
-          mimeType,
-          prompt,
-          mode: activeMode,
-          settings: activeSettings,
-        });
-    }
+    let generatedImage: string | null = null;
+    let successfulKey: ApiKey | null = null;
 
-    try {
-        const generatedImage = await generateWithKey(activeKeyInfo.key);
-        setResultImage(generatedImage);
-        setIsLoading(false);
-    } catch (error) {
-        if (error instanceof QuotaExceededError) {
-            console.warn(`API Key ${activeKeyInfo.key} exceeded quota.`);
-            
-            // Invalidate current key and find next
-            const updatedKeys = apiKeys.map(k => k.key === activeKeyInfo?.key ? { ...k, status: 'invalid' as const, isActive: false } : k);
-            const nextValidKey = updatedKeys.find(k => k.status === 'valid');
+    const imageWithText = textOverlays.length > 0
+        ? await flattenTextOverlays(image, textOverlays)
+        : image;
+    const mimeType = imageWithText.substring(imageWithText.indexOf(':') + 1, imageWithText.indexOf(';'));
 
-            if (nextValidKey) {
-                const finalKeys = updatedKeys.map(k => k.key === nextValidKey.key ? { ...k, isActive: true } : k);
-                updateApiKeysInStateAndStorage(finalKeys);
-                alert("API Key hiện tại đã hết quota. Tự động chuyển sang key hợp lệ tiếp theo và thử lại...");
-                
-                try {
-                    const generatedImage = await generateWithKey(nextValidKey.key);
-                    setResultImage(generatedImage);
-                } catch (retryError) {
-                    alert(`Thử lại không thành công: ${retryError instanceof Error ? retryError.message : String(retryError)}`);
-                }
+    for (const keyToTry of orderedKeysToTry) {
+        try {
+            console.log(`Attempting generation with key: ${keyToTry.key.substring(0, 8)}...`);
+            const result = await generateImageWithGemini({
+                apiKey: keyToTry.key,
+                base64Image: imageWithText,
+                base64BackgroundImage: activeMode === WorkMode.COMPOSITE ? backgroundImage : undefined,
+                base64ReferenceImage: activeMode === WorkMode.CREATIVE ? referenceImage : undefined,
+                base64Mask: activeMode === WorkMode.CREATIVE && isMasking ? identityMask : undefined,
+                mimeType,
+                prompt,
+                mode: activeMode,
+                settings: activeSettings,
+            });
+            generatedImage = result;
+            successfulKey = keyToTry;
+            break; // Success! Exit the loop.
+        } catch (error) {
+            if (error instanceof QuotaExceededError) {
+                console.warn(`API Key ${keyToTry.key.substring(0,8)}... exceeded quota. Trying next key.`);
+                currentApiKeysState = currentApiKeysState.map(k => 
+                    k.key === keyToTry.key ? { ...k, status: 'invalid', isActive: false } : k
+                );
             } else {
-                updateApiKeysInStateAndStorage(updatedKeys);
-                alert("API Key hiện tại đã hết quota và không còn key hợp lệ nào khác. Vui lòng thêm API Key mới.");
+                alert(`Đã xảy ra lỗi khi gọi API Gemini: ${error instanceof Error ? error.message : String(error)}`);
+                generatedImage = null;
+                break; // Exit loop on non-quota error
             }
-            setIsLoading(false);
-        } else {
-            alert(`Đã xảy ra lỗi khi gọi API Gemini: ${error instanceof Error ? error.message : String(error)}`);
-            setIsLoading(false);
         }
     }
+
+    setIsLoading(false);
+
+    if (generatedImage && successfulKey) {
+        setResultImage(generatedImage);
+        currentApiKeysState = currentApiKeysState.map(k => ({...k, isActive: k.key === successfulKey!.key}));
+    } else {
+        const remainingValidKeys = currentApiKeysState.filter(k => k.status === 'valid');
+        if (remainingValidKeys.length === 0 && validKeys.length > 0) {
+            alert("Tất cả API Key hợp lệ đã hết quota. Vui lòng thêm API Key mới.");
+        }
+    }
+    
+    updateApiKeysInStateAndStorage(currentApiKeysState);
   };
+
 
   const handleModeChange = (mode: WorkMode) => {
     if (mode !== WorkMode.COMPOSITE) {
@@ -343,18 +350,27 @@ const App: React.FC = () => {
         if (result.status === 'fulfilled') {
             const { key, isValid } = result.value;
             finalKeys = finalKeys.map(k => k.key === key ? { ...k, status: isValid ? 'valid' : 'invalid' } : k);
+        } else {
+            // Handle promise rejection if needed, e.g., network error during validation
+             const failedKey = (result.reason as any)?.key; // This depends on how you'd pass the key on failure
+             if (failedKey) {
+                finalKeys = finalKeys.map(k => k.key === failedKey ? { ...k, status: 'invalid' } : k);
+             }
         }
     });
 
     const hasActiveKey = finalKeys.some(k => k.isActive && k.status === 'valid');
     if (!hasActiveKey) {
+        // Find the first newly added key that is valid and activate it
         const firstNewValidKey = finalKeys.find(k => newKeyStrings.includes(k.key) && k.status === 'valid');
         if (firstNewValidKey) {
-            finalKeys = finalKeys.map(k => k.key === firstNewValidKey.key ? { ...k, isActive: true } : k);
+            // Deactivate all others and activate the new one
+            finalKeys = finalKeys.map(k => ({ ...k, isActive: k.key === firstNewValidKey.key }));
         } else {
-            const anyValidKey = finalKeys.find(k => k.status === 'valid');
-            if(anyValidKey) {
-                finalKeys = finalKeys.map(k => k.key === anyValidKey.key ? { ...k, isActive: true } : k);
+            // If no new keys are valid, but old valid keys exist, activate the first old valid one
+            const anyOldValidKey = finalKeys.find(k => k.status === 'valid');
+            if(anyOldValidKey) {
+                 finalKeys = finalKeys.map(k => ({ ...k, isActive: k.key === anyOldValidKey.key }));
             }
         }
     }
