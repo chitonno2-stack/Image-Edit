@@ -4,7 +4,7 @@ import ControlCenter from './components/ControlCenter';
 import Workspace from './components/Workspace';
 import ContextualPanel from './components/ContextualPanel';
 import { WorkMode, TextOverlay, ApiKey } from './types';
-import { generateImageWithGemini, validateApiKey, QuotaExceededError } from './services/geminiService';
+import { generateImageWithGemini, QuotaExceededError, AuthenticationError } from './services/geminiService';
 import { flattenTextOverlays } from './services/imageUtils';
 import ApiKeyModal from './components/ApiKeyModal';
 
@@ -94,6 +94,7 @@ const App: React.FC = () => {
   const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
   const [activeTextOverlayId, setActiveTextOverlayId] = useState<string | null>(null);
 
+  // Load keys from localStorage on initial mount
   useEffect(() => {
     try {
       const storedKeys = localStorage.getItem('gemini-api-keys');
@@ -106,12 +107,15 @@ const App: React.FC = () => {
     }
   }, []);
   
+  // Persist keys to localStorage whenever they change
+  useEffect(() => {
+    // Don't save during the initial empty state on mount
+    if (apiKeys.length > 0 || localStorage.getItem('gemini-api-keys')) {
+       localStorage.setItem('gemini-api-keys', JSON.stringify(apiKeys));
+    }
+  }, [apiKeys]);
+  
   const activeApiKey = useMemo(() => apiKeys.find(k => k.isActive)?.key || null, [apiKeys]);
-
-  const updateApiKeysInStateAndStorage = (newKeys: ApiKey[]) => {
-      setApiKeys(newKeys);
-      localStorage.setItem('gemini-api-keys', JSON.stringify(newKeys));
-  };
 
   const activeSettings = useMemo(() => settings[activeMode], [settings, activeMode]);
 
@@ -173,18 +177,18 @@ const App: React.FC = () => {
   const handleGenerate = async (prompt: string) => {
     if (!image) return;
 
-    const validKeys = apiKeys.filter(k => k.status === 'valid');
-    if (validKeys.length === 0) {
-        alert("Vui lòng thêm và chọn một API Key hợp lệ trước khi tạo ảnh.");
+    const usableKeys = apiKeys.filter(k => k.status !== 'invalid');
+    if (usableKeys.length === 0) {
+        alert("Vui lòng thêm một API Key hợp lệ trước khi tạo ảnh.");
         return;
     }
 
     // Smartly order keys to try, starting with the active one
-    const activeKey = validKeys.find(k => k.isActive);
-    const startIndex = activeKey ? validKeys.findIndex(k => k.key === activeKey.key) : 0;
+    const activeKey = usableKeys.find(k => k.isActive);
+    const startIndex = activeKey ? usableKeys.findIndex(k => k.key === activeKey.key) : 0;
     const orderedKeysToTry = startIndex !== -1 
-        ? [...validKeys.slice(startIndex), ...validKeys.slice(0, startIndex)] 
-        : validKeys;
+        ? [...usableKeys.slice(startIndex), ...usableKeys.slice(0, startIndex)] 
+        : usableKeys;
 
     setIsLoading(true);
     setResultImage(null);
@@ -214,12 +218,22 @@ const App: React.FC = () => {
             });
             generatedImage = result;
             successfulKey = keyToTry;
+            
+            // LAZY VALIDATION: If the key worked, mark it as 'valid' if it was 'unknown'
+            if (keyToTry.status === 'unknown') {
+                setApiKeys(prev => prev.map(k => k.key === keyToTry.key ? {...k, status: 'valid'} : k));
+            }
+
             break; // Success! Exit the loop.
         } catch (error) {
-            if (error instanceof QuotaExceededError) {
+            if (error instanceof AuthenticationError) {
+                console.error(`API Key ${keyToTry.key.substring(0,8)}... is invalid. Marking as invalid.`);
+                setApiKeys(prev => prev.map(k => k.key === keyToTry.key ? {...k, status: 'invalid'} : k));
+                // Continue to the next key, don't alert the user yet
+            } else if (error instanceof QuotaExceededError) {
                 console.warn(`API Key ${keyToTry.key.substring(0,8)}... hit a rate limit. Trying next key.`);
                 hadQuotaError = true;
-                // IMPORTANT: We no longer mark the key as invalid. We just try the next one.
+                // Continue to the next key
             } else {
                 alert(`Đã xảy ra lỗi không mong muốn khi gọi API: ${error instanceof Error ? error.message : String(error)}`);
                 generatedImage = null; // Ensure we don't proceed
@@ -234,14 +248,18 @@ const App: React.FC = () => {
         setResultImage(generatedImage);
         // If the successful key wasn't the active one, update the active status.
         if (!successfulKey.isActive) {
-            const finalKeys = apiKeys.map(k => ({...k, isActive: k.key === successfulKey!.key}));
-            updateApiKeysInStateAndStorage(finalKeys);
+            handleSetActiveApiKey(successfulKey.key);
         }
     } else if (hadQuotaError) {
-        // This is only reached if all keys failed, and at least one was a quota error.
+        // This is only reached if all usable keys failed, and at least one was a quota error.
         alert("Tất cả API Key hiện tại đều đã đạt đến giới hạn yêu cầu (rate-limited). Vui lòng đợi một lát rồi thử lại hoặc thêm key mới.");
+    } else if (!generatedImage) {
+        // This is reached if all keys were tried and failed (e.g., all were marked invalid)
+        const stillUsableKeys = apiKeys.filter(k => k.status !== 'invalid');
+        if(stillUsableKeys.length === 0) {
+            alert("Tất cả API Key của bạn đã được xác định là không hợp lệ. Vui lòng thêm key mới.");
+        }
     }
-    // If we are here, generatedImage is null, and hadQuotaError is false, it means a hard error occurred and the alert was already shown inside the loop. No need for another alert.
   };
 
 
@@ -328,87 +346,74 @@ const App: React.FC = () => {
   };
 
   // --- API Key Handlers ---
-  const handleAddApiKeys = async (keysString: string) => {
+  const handleAddApiKeys = (keysString: string) => {
     const newKeyStrings = keysString.split('\n')
         .map(k => k.trim())
-        .filter(k => k.length > 0)
-        .filter(k => !apiKeys.some(existingKey => existingKey.key === k));
+        .filter(k => k.length > 0);
 
-    if (newKeyStrings.length === 0) {
-      alert("Không có key mới nào được thêm. Key có thể đã tồn tại hoặc bạn chưa nhập key nào.");
-      return;
-    }
+    setApiKeys(prevKeys => {
+        const existingKeys = new Set(prevKeys.map(k => k.key));
+        const uniqueNewKeys = newKeyStrings.filter(k => !existingKeys.has(k));
 
-    const newKeyEntries: ApiKey[] = newKeyStrings.map(key => ({ key, status: 'checking', isActive: false }));
-    
-    const tempKeys = [...apiKeys, ...newKeyEntries];
-    setApiKeys(tempKeys);
-
-    const validationPromises = newKeyStrings.map(key => validateApiKey(key).then(isValid => ({ key, isValid })));
-    const results = await Promise.allSettled(validationPromises);
-
-    let finalKeys = [...tempKeys];
-    results.forEach(result => {
-        if (result.status === 'fulfilled') {
-            const { key, isValid } = result.value;
-            finalKeys = finalKeys.map(k => k.key === key ? { ...k, status: isValid ? 'valid' : 'invalid' } : k);
-        } else {
-            // Handle promise rejection if needed, e.g., network error during validation
-             const failedKey = (result.reason as any)?.key; // This depends on how you'd pass the key on failure
-             if (failedKey) {
-                finalKeys = finalKeys.map(k => k.key === failedKey ? { ...k, status: 'invalid' } : k);
-             }
+        if (uniqueNewKeys.length === 0) {
+            alert("Không có key mới nào được thêm. Key có thể đã tồn tại hoặc bạn chưa nhập key nào.");
+            return prevKeys;
         }
-    });
 
-    const hasActiveKey = finalKeys.some(k => k.isActive && k.status === 'valid');
-    if (!hasActiveKey) {
-        // Find the first newly added key that is valid and activate it
-        const firstNewValidKey = finalKeys.find(k => newKeyStrings.includes(k.key) && k.status === 'valid');
-        if (firstNewValidKey) {
-            // Deactivate all others and activate the new one
-            finalKeys = finalKeys.map(k => ({ ...k, isActive: k.key === firstNewValidKey.key }));
-        } else {
-            // If no new keys are valid, but old valid keys exist, activate the first old valid one
-            const anyOldValidKey = finalKeys.find(k => k.status === 'valid');
-            if(anyOldValidKey) {
-                 finalKeys = finalKeys.map(k => ({ ...k, isActive: k.key === anyOldValidKey.key }));
+        const newKeyEntries: ApiKey[] = uniqueNewKeys.map(key => ({ 
+            key, 
+            status: 'unknown', // Add as 'unknown' and validate on first use.
+            isActive: false 
+        }));
+
+        const combinedKeys = [...prevKeys, ...newKeyEntries];
+
+        // If there was no active key before, make the first new key active.
+        const hasActiveKey = combinedKeys.some(k => k.isActive);
+        if (!hasActiveKey && combinedKeys.length > 0) {
+            const firstKeyToActivate = combinedKeys.find(k => k.status !== 'invalid');
+            if(firstKeyToActivate) {
+                return combinedKeys.map(k => ({...k, isActive: k.key === firstKeyToActivate.key}));
             }
         }
-    }
-
-    updateApiKeysInStateAndStorage(finalKeys);
+        return combinedKeys;
+    });
   };
 
+
   const handleRemoveApiKey = (keyToRemove: string) => {
-    const wasActive = apiKeys.find(k => k.key === keyToRemove)?.isActive;
-    let newKeys = apiKeys.filter(k => k.key !== keyToRemove);
-    
-    if (wasActive && newKeys.length > 0) {
-        const firstValidIndex = newKeys.findIndex(k => k.status === 'valid');
-        if (firstValidIndex > -1) {
-            newKeys[firstValidIndex].isActive = true;
-        } else if (newKeys.length > 0) {
-            // if no valid keys left, try to activate any other key.
-            // This case is unlikely if we only allow activating valid keys.
-            // But as a fallback, just activate the first one.
-            newKeys[0].isActive = true; 
+    setApiKeys(prevKeys => {
+        const keyBeingRemoved = prevKeys.find(k => k.key === keyToRemove);
+        let newKeys = prevKeys.filter(k => k.key !== keyToRemove);
+        
+        // If the removed key was active, we need to activate a new one.
+        if (keyBeingRemoved?.isActive && newKeys.length > 0) {
+            // Find the first non-invalid key to make active.
+            const firstUsable = newKeys.find(k => k.status !== 'invalid');
+            if (firstUsable) {
+                newKeys = newKeys.map(k => ({...k, isActive: k.key === firstUsable.key}));
+            } else {
+                // If no usable keys are left, just make the first one active.
+                newKeys[0].isActive = true;
+            }
         }
-    }
-    updateApiKeysInStateAndStorage(newKeys);
+        return newKeys;
+    });
   };
 
   const handleSetActiveApiKey = (keyToActivate: string) => {
-    const keyToUpdate = apiKeys.find(k => k.key === keyToActivate);
-    if (keyToUpdate && keyToUpdate.status !== 'valid') {
-        alert("Chỉ có thể kích hoạt API Key hợp lệ.");
-        return;
-    }
-    const newKeys = apiKeys.map(k => ({
-      ...k,
-      isActive: k.key === keyToActivate,
-    }));
-    updateApiKeysInStateAndStorage(newKeys);
+    setApiKeys(prevKeys => {
+        const keyToUpdate = prevKeys.find(k => k.key === keyToActivate);
+        // Allow activating 'unknown' keys, as they haven't been proven invalid.
+        if (keyToUpdate && keyToUpdate.status === 'invalid') {
+            alert("Không thể kích hoạt API Key đã được xác định là không hợp lệ.");
+            return prevKeys; // Return original state if invalid
+        }
+        return prevKeys.map(k => ({
+            ...k,
+            isActive: k.key === keyToActivate,
+        }));
+    });
   };
 
 

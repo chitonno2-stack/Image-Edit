@@ -21,21 +21,12 @@ export class QuotaExceededError extends Error {
   }
 }
 
-export const validateApiKey = async (apiKey: string): Promise<boolean> => {
-    if (!apiKey) return false;
-    try {
-        const ai = new GoogleGenAI({ apiKey });
-        // Use a lightweight model and a simple prompt for a quick and cheap validation call.
-        await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: 'Hi',
-        });
-        return true;
-    } catch (error) {
-        console.error("API Key validation failed:", error);
-        return false;
-    }
-};
+export class AuthenticationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthenticationError';
+  }
+}
 
 const generateFullPrompt = (prompt: string, mode: WorkMode, settings: Record<string, any>, base64ReferenceImage?: string | null, base64Mask?: string | null): string => {
     let fullPrompt = `Task: Perform an image editing operation based on the user's request.
@@ -339,8 +330,14 @@ export const generateImageWithGemini = async ({ apiKey, base64Image, base64Backg
 
     } catch (error) {
         console.error("Error calling Gemini API:", error);
-        if (error instanceof Error && (error.message.includes('429') || error.message.toLowerCase().includes('quota'))) {
-            throw new QuotaExceededError('API quota exceeded or rate limit reached.');
+        if (error instanceof Error) {
+            const lowerCaseMessage = error.message.toLowerCase();
+            if (lowerCaseMessage.includes('api key not valid')) {
+                throw new AuthenticationError('The provided API Key is invalid.');
+            }
+            if (lowerCaseMessage.includes('429') || lowerCaseMessage.includes('quota')) {
+                throw new QuotaExceededError('API quota exceeded or rate limit reached.');
+            }
         }
         // Re-throw other errors to be handled by the UI layer
         throw error;

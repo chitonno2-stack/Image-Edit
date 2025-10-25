@@ -6,7 +6,7 @@ interface ApiKeyModalProps {
   isOpen: boolean;
   onClose: () => void;
   apiKeys: ApiKey[];
-  onAddKeys: (keys: string) => Promise<void>;
+  onAddKeys: (keys: string) => void;
   onRemoveKey: (key: string) => void;
   onSetActiveKey: (key: string) => void;
 }
@@ -22,22 +22,19 @@ const ApiKeyStatusIndicator: React.FC<{ status: ApiKey['status'] }> = ({ status 
             return <div className={`${baseClasses} bg-yellow-500 animate-pulse`} title="Đang kiểm tra..."></div>;
         case 'unknown':
         default:
-            return <div className={`${baseClasses} bg-gray-500`} title="Không rõ"></div>;
+            return <div className={`${baseClasses} bg-gray-500`} title="Chưa được xác thực"></div>;
     }
 };
 
 const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKeys, onAddKeys, onRemoveKey, onSetActiveKey }) => {
   const [inputValue, setInputValue] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleAdd = async () => {
+  const handleAdd = () => {
     if (!inputValue.trim()) return;
-    setIsAdding(true);
-    await onAddKeys(inputValue);
+    onAddKeys(inputValue);
     setInputValue('');
-    setIsAdding(false);
   };
 
   const maskKey = (key: string) => {
@@ -72,7 +69,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKeys, onA
                     {isActive && <span className="text-xs font-bold text-blue-400 bg-blue-900/50 px-2 py-0.5 rounded-full">Đang dùng</span>}
                 </div>
                 <div className="flex items-center gap-2">
-                    {!isActive && status === 'valid' && (
+                    {!isActive && status !== 'invalid' && (
                         <button 
                             onClick={() => onSetActiveKey(key)}
                             className="text-xs text-green-400 hover:text-green-300 hover:underline px-2"
@@ -107,17 +104,10 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, apiKeys, onA
             />
             <button
               onClick={handleAdd}
-              disabled={isAdding || !inputValue.trim()}
+              disabled={!inputValue.trim()}
               className="px-5 py-2 w-36 flex justify-center items-center bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
             >
-              {isAdding ? (
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-              ) : (
-                'Thêm & Kiểm tra'
-              )}
+              Thêm Key
             </button>
           </div>
         </div>
