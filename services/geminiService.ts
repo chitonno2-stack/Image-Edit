@@ -1,14 +1,8 @@
 import { GoogleGenAI, Modality, Part } from "@google/genai";
 import { WorkMode } from '../types';
 
-// This is a placeholder for the real API key which would be in process.env.API_KEY
-// In a real browser environment, this key would need to be handled securely,
-// often by making requests through a backend server that has access to the key.
-const API_KEY = process.env.API_KEY; 
-
-const ai = new GoogleGenAI({ apiKey: API_KEY! });
-
 interface EditParams {
+  apiKey: string;
   base64Image: string;
   base64BackgroundImage?: string | null;
   base64ReferenceImage?: string | null;
@@ -246,11 +240,13 @@ Apply the following style and technical parameters:\n`;
     return fullPrompt;
 }
 
-export const generateImageWithGemini = async ({ base64Image, base64BackgroundImage, base64ReferenceImage, base64Mask, mimeType, prompt, mode, settings }: EditParams): Promise<string> => {
-    if (!API_KEY) {
-        console.warn("API Key not found. Displaying a mock response.");
-        return new Promise(resolve => setTimeout(() => resolve(base64Image), 2000));
+export const generateImageWithGemini = async ({ apiKey, base64Image, base64BackgroundImage, base64ReferenceImage, base64Mask, mimeType, prompt, mode, settings }: EditParams): Promise<string> => {
+    if (!apiKey) {
+        console.error("API Key is missing.");
+        throw new Error("API Key is required to generate images.");
     }
+    
+    const ai = new GoogleGenAI({ apiKey });
 
     try {
         const parts: Part[] = [];
@@ -319,6 +315,7 @@ export const generateImageWithGemini = async ({ base64Image, base64BackgroundIma
 
     } catch (error) {
         console.error("Error calling Gemini API:", error);
+        alert(`Đã xảy ra lỗi khi gọi API Gemini: ${error instanceof Error ? error.message : String(error)}\n\nVui lòng kiểm tra lại API Key và thử lại.`);
         return base64Image;
     }
 };

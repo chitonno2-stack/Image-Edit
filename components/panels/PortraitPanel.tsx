@@ -25,6 +25,7 @@ interface PortraitPanelProps {
   };
   onSettingsChange: (newSettings: Partial<PortraitPanelProps['settings']>) => void;
   onGenerate: (prompt: string) => void;
+  isApiKeySet: boolean;
 }
 
 const ButtonGroup: React.FC<{ options: {value: string, label: string}[], selected: string, onSelect: (option: string) => void }> = ({ options, selected, onSelect }) => (
@@ -42,7 +43,7 @@ const ButtonGroup: React.FC<{ options: {value: string, label: string}[], selecte
 );
 
 
-const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChange, onGenerate }) => {
+const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChange, onGenerate, isApiKeySet }) => {
   
   const handleInstantRemaster = () => {
     onGenerate("INSTANT_STUDIO_REMASTER");
@@ -66,7 +67,9 @@ const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChang
       <div className="p-2">
         <button 
           onClick={handleInstantRemaster}
-          className="w-full font-semibold bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 rounded-lg py-3 transition-all text-white shadow-lg"
+          disabled={!isApiKeySet}
+          title={!isApiKeySet ? "Vui lòng nhập API Key để sử dụng" : "Áp dụng các cài đặt tốt nhất để có một bức ảnh studio chuyên nghiệp chỉ với một cú nhấp chuột."}
+          className="w-full font-semibold bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 rounded-lg py-3 transition-all text-white shadow-lg disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed"
         >
           🚀 TÁI TẠO STUDIO TỨC THÌ
         </button>
@@ -195,7 +198,9 @@ const PortraitPanel: React.FC<PortraitPanelProps> = ({ settings, onSettingsChang
           </select>
           <button
             onClick={handleApplyStyle}
-            className="w-full mt-2 font-semibold bg-green-600 hover:bg-green-700 rounded-lg py-2 transition-colors text-white"
+            disabled={!isApiKeySet}
+            title={!isApiKeySet ? "Vui lòng nhập API Key để sử dụng" : ""}
+            className="w-full mt-2 font-semibold bg-green-600 hover:bg-green-700 rounded-lg py-2 transition-colors text-white disabled:bg-gray-500 disabled:cursor-not-allowed"
           >
             Áp Dụng Phong Cách
           </button>

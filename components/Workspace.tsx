@@ -19,6 +19,7 @@ interface WorkspaceProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  isApiKeySet: boolean;
   // Masking Props
   isMasking: boolean;
   identityMask: string | null;
@@ -155,7 +156,7 @@ const DraggableText: React.FC<{
 
 
 const Workspace: React.FC<WorkspaceProps> = ({ 
-  activeMode, originalImage, resultImage, backgroundImage, onImageUpload, onClearImage, isLoading, onGenerate, onCommitResult, onUndo, onRedo, canUndo, canRedo,
+  activeMode, originalImage, resultImage, backgroundImage, onImageUpload, onClearImage, isLoading, onGenerate, onCommitResult, onUndo, onRedo, canUndo, canRedo, isApiKeySet,
   isMasking, identityMask, onMaskChange, brushSize,
   textOverlays, activeTextOverlayId, onAddText, onUpdateTextOverlay, onDeleteTextOverlay, onSelectTextOverlay
 }) => {
@@ -505,8 +506,9 @@ const Workspace: React.FC<WorkspaceProps> = ({
             />
             <button
                 onClick={handleGenerateClick}
-                disabled={isLoading || !originalImage}
+                disabled={isLoading || !originalImage || !isApiKeySet}
                 className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                title={!isApiKeySet ? "Vui lòng nhập API Key để tạo ảnh" : ""}
             >
                 Tạo
             </button>

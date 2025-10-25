@@ -15,6 +15,7 @@ interface CreativePanelProps {
   onGenerate: (prompt: string) => void;
   onReferenceImageUpload: (file: File) => void;
   referenceImage: string | null;
+  isApiKeySet: boolean;
   isMasking: boolean;
   onToggleMasking: () => void;
   brushSize: number;
@@ -63,7 +64,7 @@ const ReferenceImageUpload: React.FC<{ onUpload: (file: File) => void; image: st
 }
 
 const CreativePanel: React.FC<CreativePanelProps> = ({ 
-    settings, onSettingsChange, onGenerate, onReferenceImageUpload, referenceImage,
+    settings, onSettingsChange, onGenerate, onReferenceImageUpload, referenceImage, isApiKeySet,
     isMasking, onToggleMasking, brushSize, onBrushSizeChange
 }) => {
 
@@ -132,7 +133,9 @@ const CreativePanel: React.FC<CreativePanelProps> = ({
 
         <button 
           onClick={handleFullBodyGenerate}
-          className="w-full mt-2 font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg py-3 transition-colors text-white"
+          disabled={!isApiKeySet}
+          title={!isApiKeySet ? "Vui lòng nhập API Key để sử dụng" : ""}
+          className="w-full mt-2 font-semibold bg-blue-600 hover:bg-blue-700 rounded-lg py-3 transition-colors text-white disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
           ✨ Tái Tạo Toàn Thân
         </button>
@@ -196,7 +199,9 @@ const CreativePanel: React.FC<CreativePanelProps> = ({
                  <h4 className="text-sm font-bold text-gray-300 mb-2">Bước 3: Lồng Ghép Siêu Thực</h4>
                  <button
                     onClick={handleStudioSwapGenerate}
-                    className="w-full font-semibold bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 rounded-lg py-3 transition-all text-white shadow-lg"
+                    disabled={!isApiKeySet}
+                    title={!isApiKeySet ? "Vui lòng nhập API Key để sử dụng" : ""}
+                    className="w-full font-semibold bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800 rounded-lg py-3 transition-all text-white shadow-lg disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed"
                  >
                     🚀 Thực thi Lồng ghép
                  </button>

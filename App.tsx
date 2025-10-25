@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ControlCenter from './components/ControlCenter';
 import Workspace from './components/Workspace';
 import ContextualPanel from './components/ContextualPanel';
 import { WorkMode, TextOverlay } from './types';
 import { generateImageWithGemini } from './services/geminiService';
 import { flattenTextOverlays } from './services/imageUtils';
+import ApiKeyModal from './components/ApiKeyModal';
 
 const initialSettings = {
   [WorkMode.PORTRAIT]: {
@@ -79,6 +80,8 @@ const App: React.FC = () => {
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [settings, setSettings] = useState<typeof initialSettings>(initialSettings);
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
   // State for Identity Lock/Masking feature
   const [isMasking, setIsMasking] = useState(false);
@@ -89,6 +92,12 @@ const App: React.FC = () => {
   const [textOverlays, setTextOverlays] = useState<TextOverlay[]>([]);
   const [activeTextOverlayId, setActiveTextOverlayId] = useState<string | null>(null);
 
+  useEffect(() => {
+    const storedKey = sessionStorage.getItem('gemini-api-key');
+    if (storedKey) {
+      setApiKey(storedKey);
+    }
+  }, []);
 
   const activeSettings = useMemo(() => settings[activeMode], [settings, activeMode]);
 
@@ -149,6 +158,12 @@ const App: React.FC = () => {
   
   const handleGenerate = async (prompt: string) => {
     if (!image) return;
+    if (!apiKey) {
+      alert("Vui lòng nhập API Key của bạn trước khi tạo ảnh.");
+      setIsApiKeyModalOpen(true);
+      return;
+    }
+
     setIsLoading(true);
     setResultImage(null);
     
@@ -158,6 +173,7 @@ const App: React.FC = () => {
       
     const mimeType = imageWithText.substring(imageWithText.indexOf(':') + 1, imageWithText.indexOf(';'));
     const generatedImage = await generateImageWithGemini({
+      apiKey,
       base64Image: imageWithText,
       base64BackgroundImage: activeMode === WorkMode.COMPOSITE ? backgroundImage : undefined,
       base64ReferenceImage: activeMode === WorkMode.CREATIVE ? referenceImage : undefined,
@@ -254,13 +270,28 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveApiKey = (key: string) => {
+    setApiKey(key);
+    sessionStorage.setItem('gemini-api-key', key);
+    setIsApiKeyModalOpen(false);
+  };
+
+  const handleClearApiKey = () => {
+    setApiKey(null);
+    sessionStorage.removeItem('gemini-api-key');
+  };
+
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
 
   return (
     <div className="flex h-screen w-screen bg-gray-800/50">
       <aside className="w-80 flex flex-col bg-gray-900 border-r border-gray-700/50">
-        <ControlCenter activeMode={activeMode} setActiveMode={handleModeChange} />
+        <ControlCenter 
+          activeMode={activeMode} 
+          setActiveMode={handleModeChange}
+          onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        />
         <ContextualPanel 
           activeMode={activeMode} 
           settings={activeSettings}
@@ -272,6 +303,7 @@ const App: React.FC = () => {
           isCollapsed={isPanelCollapsed}
           onToggleCollapse={() => setIsPanelCollapsed(p => !p)}
           onGenerate={handleGenerate}
+          isApiKeySet={!!apiKey}
           // Masking props for Creative Panel
           isMasking={isMasking}
           onToggleMasking={() => setIsMasking(p => !p)}
@@ -294,6 +326,7 @@ const App: React.FC = () => {
           onRedo={handleRedo}
           canUndo={canUndo}
           canRedo={canRedo}
+          isApiKeySet={!!apiKey}
           // Masking props for Workspace
           isMasking={isMasking}
           identityMask={identityMask}
@@ -308,6 +341,13 @@ const App: React.FC = () => {
           onSelectTextOverlay={setActiveTextOverlayId}
         />
       </main>
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        onSave={handleSaveApiKey}
+        onClear={handleClearApiKey}
+        currentKey={apiKey}
+      />
     </div>
   );
 };
