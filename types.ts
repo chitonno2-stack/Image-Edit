@@ -25,3 +25,9 @@ export interface TextOverlay {
   x: number; // position as percentage of width
   y: number; // position as percentage of height
 }
+
+export interface ApiKey {
+  key: string;
+  status: 'valid' | 'invalid' | 'unknown' | 'checking';
+  isActive: boolean;
+}

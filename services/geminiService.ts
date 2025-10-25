@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality, Part } from "@google/genai";
 import { WorkMode } from '../types';
 
@@ -12,6 +13,22 @@ interface EditParams {
   mode: WorkMode;
   settings: Record<string, any>;
 }
+
+export const validateApiKey = async (apiKey: string): Promise<boolean> => {
+    if (!apiKey) return false;
+    try {
+        const ai = new GoogleGenAI({ apiKey });
+        // Use a lightweight model and a simple prompt for a quick and cheap validation call.
+        await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: 'Hi',
+        });
+        return true;
+    } catch (error) {
+        console.error("API Key validation failed:", error);
+        return false;
+    }
+};
 
 const generateFullPrompt = (prompt: string, mode: WorkMode, settings: Record<string, any>, base64ReferenceImage?: string | null, base64Mask?: string | null): string => {
     let fullPrompt = `Task: Perform an image editing operation based on the user's request.
@@ -156,7 +173,7 @@ Apply the following style and technical parameters:\n`;
 
     if (mode === WorkMode.CREATIVE) {
         if (base64Mask) {
-            fullPrompt = `CRITICAL TASK: INPAINTING/OUTPAINTING WITH A PROTECTED MASK. A second image is provided which acts as a mask. The WHITE areas on this mask are PROTECTED and MUST NOT BE ALTERED in any way. The BLACK areas are where new content should be generated.
+            fullPrompt = `CRITICAL TASK: INPAINTING/OUTPAINTING WITH A PROTECTED MASK. A second image is provided which acts as a mask. The WHITE areas on this mask are PROTECTED and MUST NOT BE ALTERTERED in any way. The BLACK areas are where new content should be generated.
 
 **ABSOLUTE RULE: Preserve the white masked areas of the original image with 100% fidelity.**
 
